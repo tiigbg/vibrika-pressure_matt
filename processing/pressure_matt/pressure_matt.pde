@@ -1,4 +1,5 @@
 import processing.serial.*;
+import controlP5.*;
 
 boolean debug =false;
 boolean fakeData = false;
@@ -23,20 +24,26 @@ import netP5.*;
 
 OscP5 oscP5;
 NetAddress dest;
+WekinatorProxy wp;
+
+int classifier = 0;
+
+ControlP5 cp5;
 
 void setup()
 {
   /* start oscP5, listening for incoming messages at port 12000 */
-  oscP5 = new OscP5(this,9000);
+  oscP5 = new OscP5(this,12000);
   dest = new NetAddress("127.0.0.1",6448);
-  
+  wp = new WekinatorProxy(oscP5);
+
   fullScreen();
   if(!fakeData)
     noLoop();
-  
+
   background(0);
   textSize(textSize);
-  
+
   if(!fakeData)
   {
     int n = 0;
@@ -53,22 +60,66 @@ void setup()
     myPort = new Serial(this, portName, 115200);
     myPort.bufferUntil('\n');
   }
-  
-  
+
+
   blockWidth = min((displayWidth-2*margin)/nrOfPointsWidth, (displayHeight-2*margin)/nrOfPointsHeight);
   blockHeight = blockWidth;
-  
+
   println("blockWidth="+blockWidth);
   println("blockHeight="+blockHeight);
-  
-  
-  
+
+
+
   println("Setup done.");
   println("-----------");
 }
 
+void createControls() {
+  cp5 = new ControlP5(this);
+
+  // cp5.addToggle("isRecording")
+  //    .setPosition(10,20)
+  //    .setSize(75,20)
+  //    .setValue(true)
+  //    .setCaptionLabel("record/run")
+  //    .setMode(ControlP5.SWITCH)
+  //    ;
+
+  //  cp5.addButton("buttonClearTrain")
+  //    .setValue(0)
+  //    .setCaptionLabel("Clear training examples")
+  //    .setPosition(10,90)
+  //    .setSize(120,19)
+  //    ;
+
+    cp5.addButton("buttonRecord")
+     .setValue(0)
+     .setCaptionLabel("Record")
+     .setPosition(10,60)
+     .setSize(120,19)
+     ;
+
+  //  cp5.addButton("buttonClearTest")
+  //    .setValue(0)
+  //    .setCaptionLabel("Clear test examples")
+  //    .setPosition(10,150)
+  //    .setSize(120,19)
+  //    ;
+
+  //  cp5.addButton("drawDecision")
+  //    .setBroadcast(false)
+  //    .setValue(0)
+  //    .setCaptionLabel("Draw decision boundaries")
+  //    .setPosition(10,120)
+  //    .setSize(120,19)
+  //    .setBroadcast(true)
+  //    ;
+
+}
+
 void draw()
 {
+  textSize(textSize);//Reset if was changed at some point
   pushMatrix();
   translate(margin, margin);
   background(255);
@@ -80,7 +131,7 @@ void draw()
       if(y == 0){
         text(""+(x+1), x*blockWidth,-margin/2);
       }
-    
+
       int value = 0;
       if(!fakeData)
       {
@@ -92,7 +143,7 @@ void draw()
         value = int(random(1024));
       }
       color valueColor = getColor(value);
-      
+
       //draw box
       fill(valueColor);
       rect(x*blockWidth,y*blockHeight,blockWidth,blockHeight);
@@ -103,10 +154,18 @@ void draw()
   }
   if(fakeData)
     delay(100);
-    
+
   popMatrix();
+  textSize(textSize*4);
+  text(""+classifier, nrOfPointsWidth*blockWidth+margin,(height+textSize)/2);
 }
 
+void oscEvent(OscMessage theOscMessage) {
+  // synchronized(locking) {
+  float c = wp.getFloatValue(theOscMessage);
+  classifier = (int) c;
+  // println("RECEIVED BUT NOT WAITING: " + c);
+}
 
 void serialEvent(Serial p){
   try{
@@ -127,11 +186,11 @@ void serialEvent(Serial p){
         sensorValues[y][x] = Integer.parseInt(trim(inputNrs[index]));
       }
     }
-    
+
     //Also print if we got some extra string content
-    if(inputNrs.length > nrOfPointsWidth * nrOfPointsHeight){
-      println("extra info: " + inputNrs[nrOfPointsWidth * nrOfPointsHeight]);
-    }
+    // if(inputNrs.length > nrOfPointsWidth * nrOfPointsHeight){
+    //   println("extra info: " + inputNrs[nrOfPointsWidth * nrOfPointsHeight]);
+    // }
     redraw();
     sendOsc();
   }
@@ -146,7 +205,7 @@ void sendOsc() {
     {
       for(int x = 0; x< nrOfPointsWidth;x++)
       {
-        msg.add((float)sensorValues[y][x]); 
+        msg.add((float)sensorValues[y][x]);
       }
   }
   oscP5.send(msg, dest);
@@ -158,10 +217,10 @@ color getColor(int value)
 {
   value = min(max(value, 500),1023);
   int x = int(map(value, 500, 1023, 0, 255));
-  
+
   //grayscale
   //return color(x);
-  
+
   //red-green scale
   return color(x,0, 255-x);
 }
